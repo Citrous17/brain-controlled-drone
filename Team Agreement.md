@@ -59,3 +59,4 @@ These weekly meetings will consist of the following:
 # Team Member Signatures
 
 Kyle Stallings
+Pravar Chetan
