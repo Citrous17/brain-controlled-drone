@@ -61,3 +61,4 @@ These weekly meetings will consist of the following:
 Kyle Stallings
 Pravar Chetan
 Samuel Huang
+Greg Miller
