@@ -1,19 +1,23 @@
 # Team Agreement
 
-## Team Megamind \- 1/22/2025
+## Team Megamind \- 2/10/2025
 
 # Team Goals and Objectives
 
-1) Research and buy all sensors  
+1) Research and buy all Dry EEG sensors (Ag based), Preamps (AD620)  
+   1) The  Dry sensors are needed as wet sensors are expensive and uncomfortable to wear for long periods of time. Also the agent that completes contact between the node and the skin will dry over time and cause increased impedance.  
+   2) Preamps will magnify the initial 10-100 microvolt signal from the sensors to the filters. Creating a stronger signal will reduce the effect of noise distortion providing more accurate readings. This will also allow us to differentiate the noise in the nano to pi signal from the actual data from the node.  
 2) Test and get an understanding of all necessary sensors  
-3) Plug sensors into micro-chip (most likely raspberry pi) and test the outputs on a closed system  
-4) Send commands to drone from device (not based on sensor inputs)  
-5) Send commands to drone from device based on sensor inputs  
-6) Develop system usable with a range of dexterity limitations  
-7) If we have the brain reader, then learn how it works  
-8) Connect the brain reader to the glove to use either as inputs to move the drone  
-     
-   
+3) Plug sensors into micro-chip Arduino Nano 33 iot and test the outputs on a closed system  
+4) Implement an EEG recording system, with  90% measurement comparability to an established medical grade system.  
+5) Data filtering system to isolate different brainwave readings in the range of 8 to 59 Hz.  
+6) Data storage system to hold user trials measurements.  
+7) Send commands to drone from device (not based on sensor inputs)  
+8) Create a system that will teach the user how to use the device while also gathering data that is necessary for the machine learning model.  
+9) Send commands to drone from device based on sensor inputs  
+10) Create a more efficient training set for users to optimize the BCI.  
+11) Design an enjoyable course that encourages users to fully complete it, so they can fully utilize the control system.  
+12) Have user machine learning models have 90% accuracy between user intent and control signal output. 
 
 # Roles and Responsibilities
 
@@ -58,7 +62,7 @@ These weekly meetings will consist of the following:
 
 # Team Member Signatures
 
-Kyle Stallings
-Pravar Chetan
-Samuel Huang
-Greg Miller
+Kyle Stallings  
+Gregory Miller  
+Pravar Chetan  
+Sam Huang
