@@ -1,0 +1,42 @@
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(255) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE sessions (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    session_name VARCHAR(255) NOT NULL,
+    start_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    end_time TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE brainwave_data (
+    id SERIAL PRIMARY KEY,
+    session_id INT REFERENCES sessions(id) ON DELETE CASCADE,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    alpha DOUBLE PRECISION,     
+    beta DOUBLE PRECISION,
+    theta DOUBLE PRECISION,
+    delta DOUBLE PRECISION,
+    gamma DOUBLE PRECISION,
+    raw_data TEXT,              
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE brainwave_metrics (
+    id SERIAL PRIMARY KEY,
+    session_id INT REFERENCES sessions(id) ON DELETE CASCADE,
+    alpha_avg DOUBLE PRECISION,
+    beta_avg DOUBLE PRECISION,
+    theta_avg DOUBLE PRECISION,
+    delta_avg DOUBLE PRECISION,
+    gamma_avg DOUBLE PRECISION,
+    session_duration INT,        
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
