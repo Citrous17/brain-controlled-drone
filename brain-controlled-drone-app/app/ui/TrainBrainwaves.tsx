@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import BrainwaveChart from "@/app/ui/BrainwaveChart"; // Your existing component
+import OscilloscopeGraph from "./OscilliscopeGraph";
 
 const trainingOptions: (keyof typeof images)[] = [
     "Train Forward",
@@ -115,16 +115,7 @@ export default function TrainBrainwaves() {
                 <video src={mediaSrc} width={800} height={800} controls className="max-w-md mt-4 rounded shadow" />
             )}
 
-            <BrainwaveChart />
-
-            {/* Fetch Brainwave Data Button */}
-            <button
-                onClick={fetchBrainwaveData}
-                className="px-4 py-2 bg-purple-500 text-white rounded-lg"
-            >
-                Fetch Brainwave Data
-            </button>
-
+            <OscilloscopeGraph />
 
         </div>
     );

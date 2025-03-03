@@ -12,7 +12,6 @@ export default function BrainwaveGraph({ data }: BrainwaveGraphProps) {
     }
     return (
         <>
-            <h1>Brainwave Data</h1>
             <LineChart width={800} height={400} data={data}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="timestamp" />

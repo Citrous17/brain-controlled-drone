@@ -1,3 +1,4 @@
+"use client";
 import Image from "next/image";
 import Footer from "./footer";
 import BrainwaveChart from "./BrainwaveChart";
@@ -22,6 +23,54 @@ export default function Home() {
             > Go to Training Center...
               </Link>  
           </div>
+        </div>
+
+      
+        {/* Three Buttons Below the Graph */}
+        <div className="flex w-full justify-between mt-4">
+          <button
+            className="button button-primary flex-1 mx-2"
+            onClick={() => alert("Train Model Clicked!")}
+          >
+            Train Model
+          </button>
+          <button
+            className="button button-secondary flex-1 mx-2"
+            onClick={() => alert("Reset Readings Clicked!")}
+          >
+            Reset Readings
+          </button>
+          <button
+            className="button button-tertiary flex-1 mx-2"
+            onClick={() => alert("Recalibrate Clicked!")}
+          >
+            Recalibrate
+          </button>
+        </div>
+
+        <h2 className="text-xl font-semibold text-center sm:text-left mt-6">
+          Drone Controls
+        </h2>
+
+        <div className="flex justify-center w-full">
+          <button className="button button-primary self-start mx-2" onClick={() => alert("Move Forward Clicked!")}>
+            Move Forward
+          </button>
+          <button className="button button-primary self-start mx-2" onClick={() => alert("Move Back Clicked!")}>
+            Move Back
+          </button>
+          <button className="button button-primary self-start mx-2" onClick={() => alert("Move Up Clicked!")}>
+            Move Up
+          </button>
+          <button className="button button-primary self-start mx-2" onClick={() => alert("Move Down Clicked!")}>
+            Move Down
+          </button>
+          <button className="button button-primary self-start mx-2" onClick={() => alert("Move Left Clicked!")}>
+            Move Left
+          </button>
+          <button className="button button-primary self-start mx-2" onClick={() => alert("Move Right Clicked!")}>
+            Move Right
+          </button>
         </div>
       </main>
       <Footer />
