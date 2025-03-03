@@ -1,0 +1,10 @@
+[
+    { "delta": 3.2, "theta": 4.5, "alpha": 8.1, "beta": 12.3, "gamma": 30.2, "command": "Move Forward" },
+    { "delta": 3.5, "theta": 4.2, "alpha": 7.8, "beta": 12.0, "gamma": 29.9, "command": "Move Backward" },
+    { "delta": 3.1, "theta": 4.3, "alpha": 8.0, "beta": 12.5, "gamma": 30.5, "command": "Move Left" },
+    { "delta": 3.3, "theta": 4.7, "alpha": 8.3, "beta": 12.8, "gamma": 30.7, "command": "Move Right" },
+    { "delta": 3.4, "theta": 4.6, "alpha": 8.2, "beta": 12.6, "gamma": 30.6, "command": "Move Up" },
+    { "delta": 3.0, "theta": 4.4, "alpha": 7.9, "beta": 12.2, "gamma": 30.3, "command": "Move Down" },
+    { "delta": 3.6, "theta": 4.9, "alpha": 8.4, "beta": 13.0, "gamma": 31.0, "command": "Rotate" }
+  ]
+  

@@ -12,28 +12,28 @@ export default function Home() {
         <BrainwaveChart />
         <div className="flex flex-row justify-center gap-48">
           <div className="flex flex-col items-center justify-center">
-              <h1 className="text-2xl font-bold mb-4">Brainwave Data Test</h1>
-              <BrainwaveTest />
+            <h1 className="text-2xl font-bold mb-4">Brainwave Data Test</h1>
+            <BrainwaveTest />
           </div>
           <div className="flex flex-col items-center justify-center">
-              <h1 className="text-2xl font-bold mb-4">Train your Brainwaves</h1>
-              <Link
-                href="/train"
-                className="px-4 py-2 bg-blue-500 text-white rounded-lg disabled:bg-gray-400"
+            <h1 className="text-2xl font-bold mb-4">Train your Brainwaves</h1>
+            <Link
+              href="/train"
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg disabled:bg-gray-400"
             > Go to Training Center...
-              </Link>  
+            </Link>
           </div>
         </div>
 
-      
+
         {/* Three Buttons Below the Graph */}
         <div className="flex w-full justify-between mt-4">
-          <button
-            className="button button-primary flex-1 mx-2"
-            onClick={() => alert("Train Model Clicked!")}
+          <Link
+            href="/model"
+            className="button button-primary flex-1 mx-2 text-center"
           >
             Train Model
-          </button>
+          </Link>
           <button
             className="button button-secondary flex-1 mx-2"
             onClick={() => alert("Reset Readings Clicked!")}
