@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@heroicons/react": "^2.2.0",
+    "@tensorflow/tfjs": "^4.22.0",
+    "framer-motion": "^12.4.7",
     "next": "15.1.6",
     "pg": "^8.13.3",
     "react": "^19.0.0",

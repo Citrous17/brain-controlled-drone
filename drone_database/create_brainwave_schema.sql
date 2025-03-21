@@ -25,6 +25,14 @@ CREATE TABLE brainwave_data (
     theta DOUBLE PRECISION,
     delta DOUBLE PRECISION,
     gamma DOUBLE PRECISION,
+    channel_1 DOUBLE PRECISION,
+    channel_2 DOUBLE PRECISION,
+    channel_3 DOUBLE PRECISION,
+    channel_4 DOUBLE PRECISION,
+    channel_5 DOUBLE PRECISION,
+    channel_6 DOUBLE PRECISION,
+    channel_7 DOUBLE PRECISION,
+    channel_8 DOUBLE PRECISION,
     raw_data TEXT,              
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
