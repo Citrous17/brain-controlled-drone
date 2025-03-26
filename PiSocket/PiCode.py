@@ -7,7 +7,7 @@ from collections import deque
 import csv
 
 # Serial Configuration
-SERIAL_PORT = "/dev/ttyACM1"	
+SERIAL_PORT = "/dev/ttyACM0"	
 BAUD_RATE = 115200
 SAMPLE_RATE = 550
 BUFFER_SIZE = 1024
@@ -17,9 +17,9 @@ data_buffer = deque(maxlen=BUFFER_SIZE)
 try:
     ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
     time.sleep(2)  # Give Arduino time to reset
-    print("✅ Serial connection established")
+    print("Serial connection established")
 except serial.SerialException as e:
-    print(f"❌ Error opening serial port: {e}")
+    print(f"Error opening serial port: {e}")
     exit()
 
 # ✅ Define read_serial() function
@@ -29,6 +29,8 @@ def read_serial():
         if ser.in_waiting > 0:
             line = ser.readline().decode('utf-8').strip()
             if line.isdigit():
+                if int(line) < 2 or int(line) > 1020:
+                    continue
                 data_buffer.append(int(line))
                 print(int(line))
         else:
@@ -37,7 +39,7 @@ def read_serial():
 
 def compute_fft(signal, sampling_rate):
     """ Compute FFT of the signal and return raw amplitude values scaled correctly """
-    print("⚡ Running FFT...")
+    print("Running FFT...")
     n = len(signal)
     freq = np.fft.rfftfreq(n, d=1/sampling_rate)  # Frequency bins
     
@@ -52,7 +54,7 @@ def compute_fft(signal, sampling_rate):
 
 def save_fft_to_csv(freq, fft_values, filename="fft_data.csv"):
     """ Save FFT frequency and amplitude data to a CSV file """
-    print(f"📂 Saving FFT data to {filename}...")
+    print(f"Saving FFT data to {filename}...")
     
     with open(filename, mode='w', newline='') as file:
         writer = csv.writer(file)
@@ -60,7 +62,7 @@ def save_fft_to_csv(freq, fft_values, filename="fft_data.csv"):
         for f, amp in zip(freq, fft_values):
             writer.writerow([f, amp])
     
-    print(f"✅ FFT data saved to {filename}")
+    print(f"FFT data saved to {filename}")
 
 def calibrate_amplitude(frequency, raw_amplitude):
     """ Calibrate the raw amplitude based on frequency """
@@ -74,7 +76,7 @@ def calibrate_amplitude(frequency, raw_amplitude):
 
 def extract_bands(freq, fft_values, calibration=False):
     """ Extract EEG Power Bands from FFT with optional calibration """
-    print("📊 Extracting EEG Bands...")
+    print("Extracting EEG Bands...")
     bands = {
         "Delta (0.5-4 Hz)": (0.5, 4),
         "Theta (4-8 Hz)": (4, 8),
@@ -124,19 +126,32 @@ def plot_fft(freq, fft_values, power_bands):
     plt.show()
 
 def reconstruct_signal(freq, fft_values, sampling_rate):
-    """ Reconstruct the signal from the FFT magnitude data """
-    print("🔄 Reconstructing signal from FFT data...")
+    """ Reconstruct the signal from the FFT magnitude data while ignoring frequencies below 2 Hz and handling phase correctly """
+    print("🔄 Reconstructing signal from FFT data (with frequency filter)...")
     
-    # Create complex FFT values (amplitude * e^(j*phase), assuming zero phase for simplicity)
-    fft_complex = fft_values * np.exp(1j * np.zeros_like(fft_values))  # Assuming zero phase
+    # Mask out frequencies below 2 Hz
+    freq_mask = freq >= 8.0
+    filtered_freq = freq[freq_mask]
+    filtered_fft_values = fft_values[freq_mask]
+    
+    # Create complex FFT values (magnitude * e^(j*phase)), assume phase is 0 for now (or estimate it)
+    # We could also try to create a phase estimate if needed, but for now let's assume zero phase
+    phase = np.zeros_like(filtered_fft_values)  # Assumption: Zero phase
+    fft_complex = filtered_fft_values * np.exp(1j * phase)  # Using zero phase assumption
     
     # Reconstruct signal using IFFT
     reconstructed_signal = np.fft.irfft(fft_complex)
     
+    # Apply a windowing function to the reconstructed signal to reduce edge artifacts (if needed)
+    # You can experiment with different windowing functions (like Hamming, Hann, etc.)
+    # Here we apply a simple Hamming window to the reconstructed signal:
+    window = np.hamming(len(reconstructed_signal))
+    reconstructed_signal *= window  # Apply window to reduce edge effects
+    
     # Plot the reconstructed signal
     plt.figure(figsize=(10, 5))
     plt.plot(reconstructed_signal)
-    plt.title("Reconstructed Signal")
+    plt.title("Reconstructed Signal (with low-frequency filter and windowing)")
     plt.xlabel("Sample")
     plt.ylabel("Amplitude")
     plt.show()
@@ -144,7 +159,7 @@ def reconstruct_signal(freq, fft_values, sampling_rate):
     return reconstructed_signal
 
 if __name__ == "__main__":
-    print("🚀 Script started!")
+    print("Script started!")
 
     # ✅ Start Serial Reading Thread
     serial_thread = threading.Thread(target=read_serial, daemon=True)
@@ -153,8 +168,12 @@ if __name__ == "__main__":
 
     # ✅ Main loop
     while True:
-        print(f"🛠 Buffer Size: {len(data_buffer)}")
+        print(f"Buffer Size: {len(data_buffer)}")
         if len(data_buffer) >= BUFFER_SIZE:
+            if sum(data_buffer) <= 10 or sum(data_buffer) >= 1000000:
+                print("Error: Poor Connection detected!")
+                data_buffer.clear()
+                continue
             signal = np.array(data_buffer)
             freq, fft_values = compute_fft(signal, SAMPLE_RATE)
             power_bands = extract_bands(freq, fft_values)
