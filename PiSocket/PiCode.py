@@ -22,7 +22,6 @@ except serial.SerialException as e:
     print(f"Error opening serial port: {e}")
     exit()
 
-# ✅ Define read_serial() function
 def read_serial():
     """ Reads data from Arduino via Serial """
     while True:
@@ -73,6 +72,27 @@ def calibrate_amplitude(frequency, raw_amplitude):
     calibrated_amplitude = raw_amplitude * (reference_amplitude / raw_amplitude)
     return calibrated_amplitude
 
+def plot_realtime_waveform():
+    """ Plots the real-time waveform """
+    plt.ion()
+    fig, ax = plt.subplots()
+    line, = ax.plot([], [], 'b')
+    ax.set_xlim(0, BUFFER_SIZE)
+    ax.set_ylim(0, 1024)
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Amplitude")
+    ax.set_title("Real-Time Waveform")
+    
+    while True:
+        if len(data_buffer) >= BUFFER_SIZE:
+            line.set_ydata(list(data_buffer))
+            line.set_xdata(np.arange(len(data_buffer)))
+            ax.relim()
+            ax.autoscale_view()
+            fig.canvas.draw()
+            fig.canvas.flush_events()
+            time.sleep(0.01)  # Adjust for refresh rate
+
 
 def extract_bands(freq, fft_values, calibration=False):
     """ Extract EEG Power Bands from FFT with optional calibration """
@@ -91,14 +111,14 @@ def extract_bands(freq, fft_values, calibration=False):
     
     power = {}
     for band, (low, high) in bands.items():
-        mask = (freq >= low) & (freq <= high)  # ✅ Fix: Use & instead of 'and'
-        power[band] = np.sum(fft_values[mask])  # ✅ This now works
+        mask = (freq >= low) & (freq <= high)
+        power[band] = np.sum(fft_values[mask])
     return power
 
 
 def plot_fft(freq, fft_values, power_bands):
     """ Plots FFT Spectrum and EEG Band Power """
-    print("📈 Plotting FFT and EEG Bands...")
+    print("Plotting FFT and EEG Bands...")
     plt.figure(figsize=(10, 5))
 
     # FFT Spectrum (raw data, no calibration applied here)
@@ -120,14 +140,14 @@ def plot_fft(freq, fft_values, power_bands):
 
     plt.tight_layout()
     plt.savefig("fft_plot.png")  # Save as image
-    print("✅ Plot saved as fft_plot.png")
+    print("Plot saved as fft_plot.png")
     save_fft_to_csv(freq, fft_values)
     reconstruct_signal(freq, fft_values, SAMPLE_RATE)
     plt.show()
 
 def reconstruct_signal(freq, fft_values, sampling_rate):
     """ Reconstruct the signal from the FFT magnitude data while ignoring frequencies below 2 Hz and handling phase correctly """
-    print("🔄 Reconstructing signal from FFT data (with frequency filter)...")
+    print("Reconstructing signal from FFT data (with frequency filter)...")
     
     # Mask out frequencies below 2 Hz
     freq_mask = freq >= 8.0
@@ -161,12 +181,14 @@ def reconstruct_signal(freq, fft_values, sampling_rate):
 if __name__ == "__main__":
     print("Script started!")
 
-    # ✅ Start Serial Reading Thread
     serial_thread = threading.Thread(target=read_serial, daemon=True)
     serial_thread.start()
-    print("✅ Serial reading thread started!")
+    print("Serial reading thread started!")
+    
+    waveform_thread = threading.Thread(target=plot_realtime_waveform, daemon=True)
+    waveform_thread.start()
+    print("Waveform plotting thread started!")
 
-    # ✅ Main loop
     while True:
         print(f"Buffer Size: {len(data_buffer)}")
         if len(data_buffer) >= BUFFER_SIZE:
@@ -177,7 +199,7 @@ if __name__ == "__main__":
             signal = np.array(data_buffer)
             freq, fft_values = compute_fft(signal, SAMPLE_RATE)
             power_bands = extract_bands(freq, fft_values)
-            plot_fft(freq, fft_values, power_bands)
+            #plot_fft(freq, fft_values, power_bands)
 
             data_buffer.clear()  # Reset buffer after processing
             time.sleep(1)  # Update every second
