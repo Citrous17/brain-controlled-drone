@@ -5,9 +5,25 @@ import matplotlib.pyplot as plt
 import threading
 from collections import deque
 import csv
+import scipy.signal as signal
+import sqlite3
 
 # Serial Configuration
-SERIAL_PORT = "/dev/ttyACM0"	
+# Make sure to change the SERIAL_PORT to the correct port for your Arduino
+# The SERIAL_PORT can change based on the Aduino connection
+# Another common configuration is /dev/ttyACM1 
+# If running on the Windows 11 machine, the SERIAL_PORT can be COM3 or COM4
+# The BAUD_RATE is the same as the one used in the Arduino sketch
+# The SAMPLE_RATE can be adjusted, a higher rate will give more data but will also
+# increase the amount of data to process
+# The BUFFER_SIZE is the size of the data buffer, it can be adjusted based on the amount of data
+# you want to process at once. A larger buffer will give more data but will also increase the
+# amount of data to process
+
+SERIAL_PORT = "COM3"	
+SERIAL_SLEEP_TIME = 0.01
+REALTIME_WAVEFORM_SLEEP_TIME = 0.01
+REALTIME_WAVEFORM_RANGE = 128
 BAUD_RATE = 115200
 SAMPLE_RATE = 550
 BUFFER_SIZE = 1024
@@ -16,25 +32,22 @@ data_buffer = deque(maxlen=BUFFER_SIZE)
 # Open serial connection
 try:
     ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-    time.sleep(2)  # Give Arduino time to reset
+    time.sleep(2)
     print("Serial connection established")
 except serial.SerialException as e:
     print(f"Error opening serial port: {e}")
     exit()
 
 def read_serial():
-    """ Reads data from Arduino via Serial """
+    """ Reads data from Arduino via Serial connection and appends to data_buffer """
     while True:
         if ser.in_waiting > 0:
             line = ser.readline().decode('utf-8').strip()
             if line.isdigit():
-                if int(line) < 2 or int(line) > 1020:
-                    continue
                 data_buffer.append(int(line))
-                print(int(line))
         else:
-            time.sleep(0.01)  # Avoid excessive CPU usage
-
+            # Sleep for a short time to avoid busy waiting
+            time.sleep(SERIAL_SLEEP_TIME) 
 
 def compute_fft(signal, sampling_rate):
     """ Compute FFT of the signal and return raw amplitude values scaled correctly """
@@ -44,139 +57,201 @@ def compute_fft(signal, sampling_rate):
     
     # FFT magnitude
     fft_values = np.abs(np.fft.rfft(signal)) / (n / 2)  # Normalize the magnitude to get correct amplitude
-   
+
     # Displaying the frequency and corresponding raw amplitude
     for i, f in enumerate(freq):
         print(f"Frequency: {f:.2f} Hz, Amplitude: {fft_values[i]:.2f}")
 
     return freq, fft_values
 
-def save_fft_to_csv(freq, fft_values, filename="fft_data.csv"):
-    """ Save FFT frequency and amplitude data to a CSV file """
-    print(f"Saving FFT data to {filename}...")
+def save_fft_to_csv(freq, fft_values, filename="normalized_fft_data.csv"):
+    """ Save FFT frequency and normalized amplitude data to a CSV file """
+    print(f"Saving normalized FFT data to {filename}...")
     
     with open(filename, mode='w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(["Frequency (Hz)", "Amplitude"])
+        writer.writerow(["Frequency (Hz)", "Normalized Amplitude"])
         for f, amp in zip(freq, fft_values):
             writer.writerow([f, amp])
     
-    print(f"FFT data saved to {filename}")
+    print(f"Normalized FFT data saved to {filename}")
 
-def calibrate_amplitude(frequency, raw_amplitude):
-    """ Calibrate the raw amplitude based on frequency """
-    # Here you can add custom logic to scale by a known reference point
-    # If you have a known calibration factor, apply it here.
-    # For example, let's assume a reference gain for 20 Hz signal:
-    reference_amplitude = 2000  # 20 mVpp for 20 Hz signal as an example
-    calibrated_amplitude = raw_amplitude * (reference_amplitude / raw_amplitude)
-    return calibrated_amplitude
+def apply_filter(data, frequency_range, sample_rate=SAMPLE_RATE):
+    """ Apply a band-pass filter to extract the specific frequency range """
+    low, high = frequency_range
 
-def plot_realtime_waveform():
-    """ Plots the real-time waveform """
-    plt.ion()
-    fig, ax = plt.subplots()
-    line, = ax.plot([], [], 'b')
-    ax.set_xlim(0, BUFFER_SIZE)
-    ax.set_ylim(0, 1024)
-    ax.set_xlabel("Time")
-    ax.set_ylabel("Amplitude")
-    ax.set_title("Real-Time Waveform")
+    # Normalize the frequencies with respect to Nyquist frequency
+    nyquist = 0.5 * sample_rate
+    low = low / nyquist
+    high = high / nyquist
+
+    # Create a Butterworth band-pass filter
+    b, a = signal.butter(4, [low, high], btype='band')
+
+    # Apply the filter to the signal
+    filtered_data = signal.filtfilt(b, a, data)
     
+    return filtered_data
+
+def insert_fft_into_db(freq, fft_values, db_file="fft_data.db"):
+    """ Inserts FFT frequency and amplitude data into a SQLite database. """
+    print("Inserting FFT data into database...")
+    
+    # Connect to (or create) the SQLite database
+    conn = sqlite3.connect(db_file)
+    cursor = conn.cursor()
+    
+    # Create table if it doesn't exist
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS fft_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            frequency REAL,
+            amplitude REAL,
+            timestamp REAL
+        )
+    ''')
+    
+    timestamp = time.time() 
+    # Insert each (frequency, amplitude) pair into the table
+    for f, amp in zip(freq, fft_values):
+        cursor.execute(
+            "INSERT INTO fft_data (frequency, amplitude, timestamp) VALUES (?, ?, ?)",
+            (f, amp, timestamp)
+        )
+    
+    # Commit the changes and close the connection
+    conn.commit()
+    conn.close()
+    
+    print(f"FFT data inserted into database '{db_file}'.")
+
+
+def read_csv_frequencies(csv_file="scope_0.csv"):
+    """ Reads frequencies from the CSV file and returns as a list/array """
+    frequencies = []
+    with open(csv_file, mode='r') as file:
+        reader = csv.reader(file)
+        next(reader)
+        for row in reader:
+            # Assuming that the frequency is in the first column
+            try:
+                frequencies.append(float(row[0]))
+            except ValueError:
+                continue  # Skip rows with invalid data
+    return np.array(frequencies)
+    
+def normalize_fft_with_csv(freq, fft_values, csv_file="scope_0.csv"):
+    """ Normalize FFT by dividing by corresponding frequency from CSV """
+    print("Normalizing FFT using frequencies from CSV...")
+    
+    csv_frequencies = read_csv_frequencies(csv_file)
+    
+    # Make sure CSV frequencies and FFT frequencies are the same length
+    min_length = min(len(freq), len(csv_frequencies))
+    freq = freq[:min_length]
+    fft_values = fft_values[:min_length]
+    csv_frequencies = csv_frequencies[:min_length]
+
+    # Normalize FFT values by dividing with corresponding frequencies from CSV
+    normalized_fft_values = fft_values / csv_frequencies
+
+    return freq, normalized_fft_values / 105.7
+
+    
+def plot_realtime_waveform():
+    """ Plots the real-time waveform 
+        The waveforms are separated by frequency channels:
+        Delta (0.5-4 Hz), Theta (4-8 Hz), Alpha (8-13 Hz),
+        Beta (13-30 Hz), Gamma (30-55 Hz)
+    """
+    # Constants for frequency ranges (in Hz)
+    DELTA = (0.5, 4)
+    THETA = (4, 8)
+    ALPHA = (8, 13)
+    BETA = (13, 30)
+    GAMMA = (30, 55)
+    
+    # Create a figure with 5 subplots, one for each frequency band
+    plt.ion()
+    fig, axes = plt.subplots(5, 1, figsize=(10, 10), sharex=True)  # 5 subplots stacked vertically
+    axes[0].set_title("Delta (0.5-4 Hz)")
+    axes[1].set_title("Theta (4-8 Hz)")
+    axes[2].set_title("Alpha (8-13 Hz)")
+    axes[3].set_title("Beta (13-30 Hz)")
+    axes[4].set_title("Gamma (30-55 Hz)")
+    
+    # Set common properties for all axes
+    for ax in axes:
+        ax.set_xlim(0, BUFFER_SIZE)
+        ax.set_ylim(-1 * REALTIME_WAVEFORM_RANGE, REALTIME_WAVEFORM_RANGE)
+        ax.set_ylabel("Amplitude")
+    
+    axes[4].set_xlabel("Time")
+    
+    # Create an initial empty plot for each frequency band with color differentiation
+    lines = [ax.plot([], [], color)[0] for ax, color in zip(axes, ['red', 'green', 'blue', 'purple', 'orange'])]
+    plot_counter = 0
     while True:
         if len(data_buffer) >= BUFFER_SIZE:
-            line.set_ydata(list(data_buffer))
-            line.set_xdata(np.arange(len(data_buffer)))
-            ax.relim()
-            ax.autoscale_view()
+            print("Updating Realtime Waveform")
+            # Compute and plot the waveform for each frequency band
+            filtered_data = {
+                "delta": apply_filter(data_buffer, DELTA),
+                "theta": apply_filter(data_buffer, THETA),
+                "alpha": apply_filter(data_buffer, ALPHA),
+                "beta": apply_filter(data_buffer, BETA),
+                "gamma": apply_filter(data_buffer, GAMMA),
+            }
+
+            # Ensure there is data to plot
+            for band, filtered in filtered_data.items():
+                if len(filtered) == 0:
+                    continue
+
+                # Update the plot for each channel (frequency band)
+                index = {"delta": 0, "theta": 1, "alpha": 2, "beta": 3, "gamma": 4}[band]
+                lines[index].set_ydata(filtered)
+
+            for i, ax in enumerate(axes):
+                lines[i].set_xdata(np.arange(len(data_buffer)))
+                ax.relim()
+                ax.autoscale_view()
+
             fig.canvas.draw()
+            
+            plot_counter += 1
             fig.canvas.flush_events()
-            time.sleep(0.01)  # Adjust for refresh rate
+            
+            time.sleep(REALTIME_WAVEFORM_SLEEP_TIME)
 
 
-def extract_bands(freq, fft_values, calibration=False):
-    """ Extract EEG Power Bands from FFT with optional calibration """
-    print("Extracting EEG Bands...")
-    bands = {
-        "Delta (0.5-4 Hz)": (0.5, 4),
-        "Theta (4-8 Hz)": (4, 8),
-        "Alpha (8-13 Hz)": (8, 13),
-        "Beta (13-30 Hz)": (13, 30),
-        "Gamma (30-55 Hz)": (30, 55),
-    }
+def save_realtime_waveform(fig, filtered_data, filename="realtime_waveform.png"):
+    """ Saves the current plot figure to a file. """
+    print(f"Saving real-time waveform picture to {filename}...")
+    fig.savefig(filename + ".png")   # Save the figure as a PNG file
+    print(f"Saved to {filename}")
     
-    # Apply calibration if required (for power calculation)
-    if calibration:
-        fft_values = np.array([calibrate_amplitude(f, amp) for f, amp in zip(freq, fft_values)])
+    print(f"Saving filtered data to {filename}.png ...")
     
-    power = {}
-    for band, (low, high) in bands.items():
-        mask = (freq >= low) & (freq <= high)
-        power[band] = np.sum(fft_values[mask])
-    return power
-
-
-def plot_fft(freq, fft_values, power_bands):
-    """ Plots FFT Spectrum and EEG Band Power """
-    print("Plotting FFT and EEG Bands...")
-    plt.figure(figsize=(10, 5))
-
-    # FFT Spectrum (raw data, no calibration applied here)
-    plt.subplot(1, 2, 1)
-    plt.plot(freq, fft_values, color='blue')
-    plt.xlim(0, 60)
-    plt.xlabel("Frequency (Hz)")
-    plt.ylabel("Magnitude")
-    plt.title("FFT Spectrum")
-
-    # EEG Band Powers (calibrated if required)
-    plt.subplot(1, 2, 2)
-    bands = list(power_bands.keys())
-    values = list(power_bands.values())
-    plt.bar(bands, values, color=['red', 'green', 'blue', 'purple', 'orange'])
-    plt.xlabel("EEG Bands")
-    plt.ylabel("Power")
-    plt.title("EEG Power Distribution")
-
-    plt.tight_layout()
-    plt.savefig("fft_plot.png")  # Save as image
-    print("Plot saved as fft_plot.png")
-    save_fft_to_csv(freq, fft_values)
-    reconstruct_signal(freq, fft_values, SAMPLE_RATE)
-    plt.show()
-
-def reconstruct_signal(freq, fft_values, sampling_rate):
-    """ Reconstruct the signal from the FFT magnitude data while ignoring frequencies below 2 Hz and handling phase correctly """
-    print("Reconstructing signal from FFT data (with frequency filter)...")
+    filename = "realtime_waveform_data.csv"
+        
+    # Open the CSV file in append mode ('a')
+    with open(filename, mode='a', newline='') as file:
+        writer = csv.writer(file)
+        
+        # Write header only if the file is empty (check if file is new)
+        file_empty = file.tell() == 0
+        if file_empty:
+            writer.writerow(["Timestamp", "Frequency (Hz)", "Amplitude"])
+        
+        # Append filtered data (with timestamp)
+        timestamp = time.time()  # You can adjust the timestamp format as needed
+        for band, data in filtered_data.items():
+            for i, amplitude in enumerate(data):
+                # Write the timestamp, frequency, and amplitude for each filtered data point
+                writer.writerow([timestamp, band, amplitude])
     
-    # Mask out frequencies below 2 Hz
-    freq_mask = freq >= 8.0
-    filtered_freq = freq[freq_mask]
-    filtered_fft_values = fft_values[freq_mask]
-    
-    # Create complex FFT values (magnitude * e^(j*phase)), assume phase is 0 for now (or estimate it)
-    # We could also try to create a phase estimate if needed, but for now let's assume zero phase
-    phase = np.zeros_like(filtered_fft_values)  # Assumption: Zero phase
-    fft_complex = filtered_fft_values * np.exp(1j * phase)  # Using zero phase assumption
-    
-    # Reconstruct signal using IFFT
-    reconstructed_signal = np.fft.irfft(fft_complex)
-    
-    # Apply a windowing function to the reconstructed signal to reduce edge artifacts (if needed)
-    # You can experiment with different windowing functions (like Hamming, Hann, etc.)
-    # Here we apply a simple Hamming window to the reconstructed signal:
-    window = np.hamming(len(reconstructed_signal))
-    reconstructed_signal *= window  # Apply window to reduce edge effects
-    
-    # Plot the reconstructed signal
-    plt.figure(figsize=(10, 5))
-    plt.plot(reconstructed_signal)
-    plt.title("Reconstructed Signal (with low-frequency filter and windowing)")
-    plt.xlabel("Sample")
-    plt.ylabel("Amplitude")
-    plt.show()
-    
-    return reconstructed_signal
+    print(f"Filtered data saved to {filename}")
 
 if __name__ == "__main__":
     print("Script started!")
@@ -185,21 +260,14 @@ if __name__ == "__main__":
     serial_thread.start()
     print("Serial reading thread started!")
     
-    waveform_thread = threading.Thread(target=plot_realtime_waveform, daemon=True)
-    waveform_thread.start()
+    plot_realtime_waveform()
     print("Waveform plotting thread started!")
 
     while True:
         print(f"Buffer Size: {len(data_buffer)}")
         if len(data_buffer) >= BUFFER_SIZE:
-            if sum(data_buffer) <= 10 or sum(data_buffer) >= 1000000:
-                print("Error: Poor Connection detected!")
-                data_buffer.clear()
-                continue
             signal = np.array(data_buffer)
             freq, fft_values = compute_fft(signal, SAMPLE_RATE)
-            power_bands = extract_bands(freq, fft_values)
-            #plot_fft(freq, fft_values, power_bands)
 
             data_buffer.clear()  # Reset buffer after processing
             time.sleep(1)  # Update every second

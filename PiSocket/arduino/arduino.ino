@@ -7,5 +7,5 @@ void setup() {
 void loop() {
     int value = analogRead(ANALOG_PIN);
     Serial.println(value);
-    delayMicroseconds(10);
+    delayMicroseconds(1);
 }
