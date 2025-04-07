@@ -7,6 +7,9 @@ import numpy as np
 import serial
 import scipy.signal as signal
 import sqlite3
+import joblib
+from tensorflow.keras.models import load_model
+
 # =============================
 # EEG / PiCode Configuration
 # =============================
@@ -26,7 +29,12 @@ eeg_buffer = []
 paddle_command = 0
 action = "none"
 buffer_lock = threading.Lock()  # To protect shared data
+model = load_model("eeg_action_model_tf.h5")
 
+# Load the scaler and action mapping
+scaler = joblib.load("scaler.pkl")
+action_to_index = joblib.load("action_to_index.pkl")
+index_to_action = {v: k for k, v in action_to_index.items()}
 
 
 # Setup serial connection for EEG (if available)
@@ -137,6 +145,25 @@ def process_eeg():
         
         # Debug output
         print(f"Alpha Power: {alpha_power:.2f}, Beta power: {beta_power:.2f}")
+
+        # Use ML model to predict action
+        try:
+            # Ensure input is properly shaped
+            input_data = scaler.transform([[alpha_power, beta_power]])
+            
+            # Predict
+            pred = model.predict(input_data)
+            print("Model output:", pred)
+
+            # Check shape
+            if pred.shape[0] > 0 and pred.shape[1] > 0:
+                predicted_class = np.argmax(pred[0])
+                action = index_to_action[predicted_class]
+                print("Predicted action:", action)
+            else:
+                print("Warning: Model returned unexpected shape:", pred.shape)
+        except Exception as e:
+            print("Prediction error:", e)
         
         # Determine dominant band
         # The threshold value should be adjusted based on the EEG device and environment
