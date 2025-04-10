@@ -29,6 +29,11 @@ ball_y = HEIGHT // 2
 ball_speed_x = random.choice([-4, 4])
 ball_speed_y = random.choice([-4, 4])
 
+# Scores
+player_score = 0
+opponent_score = 0
+font = pygame.font.Font(None, 74)
+
 clock = pygame.time.Clock()
 running = True
 
@@ -38,7 +43,6 @@ while running:
             running = False
 
     # Player paddle movement using W and S keys
-    # This will be changed in the future to use a players brainwaves!
     keys = pygame.key.get_pressed()
     if keys[pygame.K_w] and player_y > 0:
         player_y -= 5
@@ -71,10 +75,15 @@ while running:
     elif opponent_y + PADDLE_HEIGHT / 2 > ball_y:
         opponent_y -= 3
 
-    # Check if ball goes off the screen
-    if ball_x < 0 or ball_x > WIDTH:
-        ball_x = WIDTH // 2
-        ball_y = HEIGHT // 2
+    # Check if ball goes off the screen and update score
+    if ball_x < 0:
+        opponent_score += 1
+        ball_x, ball_y = WIDTH // 2, HEIGHT // 2
+        ball_speed_x = random.choice([-4, 4])
+        ball_speed_y = random.choice([-4, 4])
+    elif ball_x > WIDTH:
+        player_score += 1
+        ball_x, ball_y = WIDTH // 2, HEIGHT // 2
         ball_speed_x = random.choice([-4, 4])
         ball_speed_y = random.choice([-4, 4])
 
@@ -83,6 +92,10 @@ while running:
     pygame.draw.rect(screen, WHITE, (player_x, player_y, PADDLE_WIDTH, PADDLE_HEIGHT))
     pygame.draw.rect(screen, WHITE, (opponent_x, opponent_y, PADDLE_WIDTH, PADDLE_HEIGHT))
     pygame.draw.ellipse(screen, WHITE, (ball_x, ball_y, BALL_SIZE, BALL_SIZE))
+
+    # Draw scores
+    score_text = font.render(f"{player_score}    {opponent_score}", True, WHITE)
+    screen.blit(score_text, (WIDTH // 2 - score_text.get_width() // 2, 20))
 
     pygame.display.flip()
     clock.tick(FPS)
