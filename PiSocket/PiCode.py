@@ -25,7 +25,7 @@ SERIAL_SLEEP_TIME = 0.01
 REALTIME_WAVEFORM_SLEEP_TIME = 0.01
 REALTIME_WAVEFORM_RANGE = 128
 BAUD_RATE = 115200
-SAMPLE_RATE = 550
+SAMPLE_RATE = 800
 BUFFER_SIZE = 1024
 data_buffer = deque(maxlen=BUFFER_SIZE)
 
@@ -165,11 +165,11 @@ def plot_realtime_waveform():
         Beta (13-30 Hz), Gamma (30-55 Hz)
     """
     # Constants for frequency ranges (in Hz)
-    DELTA = (0.5, 4)
-    THETA = (4, 8)
-    ALPHA = (8, 13)
-    BETA = (13, 30)
-    GAMMA = (30, 55)
+    DELTA = (2, 3)
+    THETA = (3, 5)
+    ALPHA = (5.5, 9)
+    BETA = (9, 22)
+    GAMMA = (22, 35)
     
     # Create a figure with 5 subplots, one for each frequency band
     plt.ion()
