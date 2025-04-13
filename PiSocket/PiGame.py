@@ -9,7 +9,7 @@ import scipy.signal as signal
 import sqlite3
 import joblib
 from tensorflow.keras.models import load_model
-
+from Utilities import SERIAL_PORT, BAUD_RATE, SAMPLE_RATE, BUFFER_SIZE, DELTA, THETA, ALPHA, BETA, GAMMA, USE_MODEL
 # =============================
 # EEG / PiCode Configuration
 # =============================
@@ -17,25 +17,22 @@ from tensorflow.keras.models import load_model
 # The SERIAL_PORT can change based on the Aduino connection
 # If running on the Raspberry Pi, the SERIAL_PORT can be /dev/ttyACM0 or /dev/ttyACM1
 # If it is running on the Windows 11 machine, the SERIAL_PORT can be COM3 or COM4
-
-SERIAL_PORT = "COM3"
-BAUD_RATE = 115200
-SAMPLE_RATE = 550
-BUFFER_SIZE = 1024
 eeg_buffer = [] 
 
 # Global variable for paddle movement:
 #   -1 for move up, 1 for move down, 0 for still.
 paddle_command = 0
 action = "none"
+
 buffer_lock = threading.Lock()  # To protect shared data
-model = load_model("eeg_action_model_tf.h5")
 
-# Load the scaler and action mapping
-scaler = joblib.load("scaler.pkl")
-action_to_index = joblib.load("action_to_index.pkl")
-index_to_action = {v: k for k, v in action_to_index.items()}
+if USE_MODEL:
+    model = load_model("eeg_action_model_tf.h5")
 
+    # Load the scaler and action mapping
+    scaler = joblib.load("scaler.pkl")
+    action_to_index = joblib.load("action_to_index.pkl")
+    index_to_action = {v: k for k, v in action_to_index.items()}
 
 # Setup serial connection for EEG (if available)
 try:
@@ -57,6 +54,9 @@ def init_db(db_file="eeg_data.db"):
             timestamp REAL,
             alpha_power REAL,
             beta_power REAL,
+            gamma_power REAL,
+            delta_power REAL,
+            theta_power REAL,
             action TEXT
         )
     ''')
@@ -66,13 +66,16 @@ def init_db(db_file="eeg_data.db"):
 # Initialize the database (creates file and table if not present)
 init_db("eeg_data.db")
 
-def log_data_to_db(alpha_power, beta_power, action, db_file="eeg_data.db"):
+def log_data_to_db(alpha_power, beta_power, gamma_power, delta_power, theta_power, action, db_file="eeg_data.db"):
     """
     Insert a new log record into the database.
     
     Args:
         alpha_power: Computed alpha band power.
         beta_power: Computed beta band power.
+        gamma_power: Computed gamma band power.
+        delta_power: Computed delta band power.
+        theta_power: Computed theta band power.
         action: A string representing the user action (e.g., "up", "down", "none").
         db_file: SQLite database file name.
     """
@@ -80,9 +83,9 @@ def log_data_to_db(alpha_power, beta_power, action, db_file="eeg_data.db"):
     conn = sqlite3.connect(db_file)
     cursor = conn.cursor()
     cursor.execute('''
-        INSERT INTO eeg_keypress_log (timestamp, alpha_power, beta_power, action)
+        INSERT INTO eeg_keypress_log (timestamp, alpha_power, beta_power, gamma_power, delta_power, theta_power, action)
         VALUES (?, ?, ?, ?)
-    ''', (timestamp, alpha_power, beta_power, action))
+    ''', (timestamp, alpha_power, beta_power, gamma_power, gamma_power, delta_power, theta_power, action))
     conn.commit()
     conn.close()
 
@@ -137,39 +140,46 @@ def process_eeg():
         # Alpha band (8-13 Hz)
         # Beta band (13-30 Hz)
         
-        alpha_mask = (freq >= 8) & (freq <= 13)
-        beta_mask = (freq >= 13) & (freq <= 30)
+        alpha_mask = (freq >= ALPHA[0]) & (freq <= ALPHA[1])
+        beta_mask = (freq >= BETA[0]) & (freq <= BETA[1])
+        gamma_mask = (freq >= GAMMA[0]) & (freq <= GAMMA[1])
+        delta_mask = (freq >= DELTA[0]) & (freq <= DELTA[1])
+        theta_mask = (freq >= THETA[0]) & (freq <= THETA[1])
         
         alpha_power = np.sum(fft_vals[alpha_mask])
         beta_power = np.sum(fft_vals[beta_mask])
+        gamma_power = np.sum(fft_vals[gamma_mask])
+        delta_power = np.sum(fft_vals[delta_mask])
+        theta_power = np.sum(fft_vals[theta_mask])
         
         # Debug output
-        print(f"Alpha Power: {alpha_power:.2f}, Beta power: {beta_power:.2f}")
+        print(f"Alpha Power: {alpha_power:.2f}, Beta power: {beta_power:.2f}, Gamma power: {gamma_power:.2f}, Delta power: {delta_power:.2f}, Theta power: {theta_power:.2f}")
 
         # Use ML model to predict action
-        try:
-            # Ensure input is properly shaped
-            input_data = scaler.transform([[alpha_power, beta_power]])
-            
-            # Predict
-            pred = model.predict(input_data)
-            print("Model output:", pred)
+        if USE_MODEL:
+            try:
+                # Ensure input is properly shaped
+                input_data = scaler.transform([[alpha_power, beta_power, gamma_power, delta_power, theta_power]])
+                
+                # Predict
+                pred = model.predict(input_data)
+                print("Model output:", pred)
 
-            # Check shape
-            if pred.shape[0] > 0 and pred.shape[1] > 0:
-                predicted_class = np.argmax(pred[0])
-                action = index_to_action[predicted_class]
-                print("Predicted action:", action)
-            else:
-                print("Warning: Model returned unexpected shape:", pred.shape)
-        except Exception as e:
-            print("Prediction error:", e)
+                # Check shape
+                if pred.shape[0] > 0 and pred.shape[1] > 0:
+                    predicted_class = np.argmax(pred[0])
+                    action = index_to_action[predicted_class]
+                    print("Predicted action:", action)
+                else:
+                    print("Warning: Model returned unexpected shape:", pred.shape)
+            except Exception as e:
+                print("Prediction error:", e)
         
         # Determine dominant band
         # The threshold value should be adjusted based on the EEG device and environment
 
         # Log the EEG features and action to the database.
-        log_data_to_db(alpha_power, beta_power, action, db_file="eeg_data.db")
+        log_data_to_db(alpha_power, beta_power, gamma_power, delta_power, theta_power, action, db_file="eeg_data.db")
 
 # Start EEG data reading and processing threads (if serial is available)
 if ser:

@@ -12,7 +12,7 @@ from sklearn.model_selection import train_test_split
 # ------------------------------
 db_file = "eeg_data.db"
 conn = sqlite3.connect(db_file)
-query = "SELECT timestamp, alpha_power, beta_power, action FROM eeg_keypress_log"
+query = "SELECT timestamp, alpha_power, beta_power, gamma_power, delta_power, theta_power, action FROM eeg_keypress_log"
 data = pd.read_sql_query(query, conn)
 conn.close()
 
@@ -24,7 +24,7 @@ print(data.head())
 # 2. Preprocess the Data
 # ------------------------------
 # Select features (alpha_power and beta_power)
-features = data[['alpha_power', 'beta_power']].values
+features = data[['alpha_power', 'beta_power', '']].values
 
 # Encode the target labels (actions)
 # Get unique actions and create a mapping dictionary

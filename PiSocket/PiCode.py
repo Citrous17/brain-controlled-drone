@@ -7,6 +7,7 @@ from collections import deque
 import csv
 import scipy.signal as signal
 import sqlite3
+from Utilities import SERIAL_PORT, BAUD_RATE, SAMPLE_RATE, BUFFER_SIZE, SERIAL_SLEEP_TIME, REALTIME_WAVEFORM_RANGE, REALTIME_WAVEFORM_SLEEP_TIME, DELTA, THETA, ALPHA, BETA, GAMMA
 
 # Serial Configuration
 # Make sure to change the SERIAL_PORT to the correct port for your Arduino
@@ -20,13 +21,7 @@ import sqlite3
 # you want to process at once. A larger buffer will give more data but will also increase the
 # amount of data to process
 
-SERIAL_PORT = "COM3"	
-SERIAL_SLEEP_TIME = 0.01
-REALTIME_WAVEFORM_SLEEP_TIME = 0.01
-REALTIME_WAVEFORM_RANGE = 128
-BAUD_RATE = 115200
-SAMPLE_RATE = 800
-BUFFER_SIZE = 1024
+
 data_buffer = deque(maxlen=BUFFER_SIZE)
 
 # Open serial connection
@@ -157,6 +152,13 @@ def normalize_fft_with_csv(freq, fft_values, csv_file="scope_0.csv"):
 
     return freq, normalized_fft_values / 105.7
 
+def remove_outliers(data, threshold=3):
+    """ Remove outliers from the data based on a z-score threshold """
+    mean = np.mean(data)
+    std_dev = np.std(data)
+    z_scores = (data - mean) / std_dev
+    filtered_data = data[np.abs(z_scores) < threshold]
+    return filtered_data
     
 def plot_realtime_waveform():
     """ Plots the real-time waveform 
@@ -165,11 +167,6 @@ def plot_realtime_waveform():
         Beta (13-30 Hz), Gamma (30-55 Hz)
     """
     # Constants for frequency ranges (in Hz)
-    DELTA = (2, 3)
-    THETA = (3, 5)
-    ALPHA = (5.5, 9)
-    BETA = (9, 22)
-    GAMMA = (22, 35)
     
     # Create a figure with 5 subplots, one for each frequency band
     plt.ion()
@@ -267,6 +264,8 @@ if __name__ == "__main__":
         print(f"Buffer Size: {len(data_buffer)}")
         if len(data_buffer) >= BUFFER_SIZE:
             signal = np.array(data_buffer)
+            # Remove the outliers from the signal
+            signal = remove_outliers(signal)
             freq, fft_values = compute_fft(signal, SAMPLE_RATE)
 
             data_buffer.clear()  # Reset buffer after processing
