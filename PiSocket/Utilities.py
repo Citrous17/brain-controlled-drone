@@ -10,4 +10,5 @@ THETA = (3, 5)
 ALPHA = (5.5, 9)
 BETA = (9, 22)
 GAMMA = (22, 35)
-USE_MODEL = False
+USE_MODEL = True
+INSERT_INTO_DB = False

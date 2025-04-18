@@ -9,7 +9,7 @@ import scipy.signal as signal
 import sqlite3
 import joblib
 from tensorflow.keras.models import load_model
-from Utilities import SERIAL_PORT, BAUD_RATE, SAMPLE_RATE, BUFFER_SIZE, DELTA, THETA, ALPHA, BETA, GAMMA, USE_MODEL
+from Utilities import SERIAL_PORT, BAUD_RATE, SAMPLE_RATE, BUFFER_SIZE, DELTA, THETA, ALPHA, BETA, GAMMA, USE_MODEL, INSERT_INTO_DB
 # =============================
 # EEG / PiCode Configuration
 # =============================
@@ -27,7 +27,7 @@ action = "none"
 buffer_lock = threading.Lock()  # To protect shared data
 
 if USE_MODEL:
-    model = load_model("eeg_action_model_tf.h5")
+    model = load_model("eeg_action_model_tf.keras")
 
     # Load the scaler and action mapping
     scaler = joblib.load("scaler.pkl")
@@ -71,6 +71,7 @@ def log_data_to_db(alpha_power, beta_power, gamma_power, delta_power, theta_powe
     Insert a new log record into the database.
     
     Args:
+        timestamp: Timestamp of the log entry.
         alpha_power: Computed alpha band power.
         beta_power: Computed beta band power.
         gamma_power: Computed gamma band power.
@@ -82,10 +83,11 @@ def log_data_to_db(alpha_power, beta_power, gamma_power, delta_power, theta_powe
     timestamp = time.time()
     conn = sqlite3.connect(db_file)
     cursor = conn.cursor()
+
     cursor.execute('''
         INSERT INTO eeg_keypress_log (timestamp, alpha_power, beta_power, gamma_power, delta_power, theta_power, action)
-        VALUES (?, ?, ?, ?)
-    ''', (timestamp, alpha_power, beta_power, gamma_power, gamma_power, delta_power, theta_power, action))
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (timestamp, alpha_power, beta_power, gamma_power, delta_power, theta_power, action))
     conn.commit()
     conn.close()
 
@@ -179,8 +181,9 @@ def process_eeg():
         # The threshold value should be adjusted based on the EEG device and environment
 
         # Log the EEG features and action to the database.
-        log_data_to_db(alpha_power, beta_power, gamma_power, delta_power, theta_power, action, db_file="eeg_data.db")
-
+        if INSERT_INTO_DB:
+            # Log the data to the database
+            log_data_to_db(alpha_power, beta_power, gamma_power, delta_power, theta_power, action, db_file="eeg_data.db")
 # Start EEG data reading and processing threads (if serial is available)
 if ser:
     threading.Thread(target=read_eeg, daemon=True).start()

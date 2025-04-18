@@ -52,7 +52,7 @@ def log_data_to_db(alpha_power, beta_power, gamma_power, delta_power, theta_powe
     cursor.execute('''
         INSERT INTO eeg_keypress_log (timestamp, alpha_power, beta_power, gamma_power, delta_power, theta_power, action)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (timestamp, alpha_power, beta_power, gamma_power, delta_power, theta_power, action))
+    ''', (timestamp, alpha_power, beta_power, gamma_power, delta_power, theta action))
     conn.commit()
     conn.close()
 

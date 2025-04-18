@@ -24,7 +24,7 @@ print(data.head())
 # 2. Preprocess the Data
 # ------------------------------
 # Select features (alpha_power and beta_power)
-features = data[['alpha_power', 'beta_power', '']].values
+features = data[['alpha_power', 'beta_power', 'gamma_power', 'delta_power', 'theta_power']].values
 
 # Encode the target labels (actions)
 # Get unique actions and create a mapping dictionary
@@ -52,9 +52,9 @@ X_train, X_test, y_train, y_test = train_test_split(
 # 3. Build and Train a TensorFlow Model
 # ------------------------------
 model = Sequential([
-    Dense(16, activation='relu', input_shape=(X_train.shape[1],)),
-    Dense(16, activation='relu'),
-    Dense(labels_categorical.shape[1], activation='softmax')  # output layer
+    Dense(64, activation='relu', input_shape=(X_train.shape[1],)),
+    Dense(32, activation='relu'),
+    Dense(labels_categorical.shape[1], activation='sigmoid')  # output layer
 ])
 
 model.compile(optimizer='adam',
@@ -65,7 +65,7 @@ model.summary()
 
 # Train the model
 history = model.fit(X_train, y_train,
-                    epochs=50,
+                    epochs=150,
                     batch_size=16,
                     validation_split=0.2)
 
@@ -77,8 +77,8 @@ print(f"\nTest accuracy: {test_acc:.2f}")
 # 4. Save the Trained Model and Scaler
 # ------------------------------
 # Save the model
-model.save("eeg_action_model_tf.h5")
-print("\nModel saved to eeg_action_model_tf.h5")
+model.save("eeg_action_model_tf.keras")
+print("\nModel saved to eeg_action_model_tf.keras")
 
 # Save the scaler and mapping dictionary using joblib if needed for later use
 import joblib
