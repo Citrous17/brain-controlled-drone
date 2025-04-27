@@ -9,7 +9,7 @@ import scipy.signal as signal
 import sqlite3
 import joblib
 from tensorflow.keras.models import load_model
-from Utilities import SERIAL_PORT, BAUD_RATE, SAMPLE_RATE, BUFFER_SIZE, DELTA, THETA, ALPHA, BETA, GAMMA, USE_MODEL, INSERT_INTO_DB
+from Utilities import SERIAL_PORT, BAUD_RATE, SAMPLE_RATE, BUFFER_SIZE, DELTA, THETA, ALPHA, BETA, GAMMA, USE_MODEL, INSERT_INTO_DB, USE_ALGORIHITHM, BETA_THRESHOLD
 # =============================
 # EEG / PiCode Configuration
 # =============================
@@ -155,25 +155,20 @@ def process_eeg():
         theta_power = np.sum(fft_vals[theta_mask])
         
         # Debug output
-        print(f"Alpha Power: {alpha_power:.2f}, Beta power: {beta_power:.2f}, Gamma power: {gamma_power:.2f}, Delta power: {delta_power:.2f}, Theta power: {theta_power:.2f}")
+        print(f"Alpha Power: {alpha_power:.6f}, Beta power: {beta_power:.6f}, Gamma power: {gamma_power:.2f}, Delta power: {delta_power:.2f}, Theta power: {theta_power:.2f}")
 
         # Use ML model to predict action
-        if USE_MODEL:
+        if USE_ALGORIHITHM:
             try:
-                # Ensure input is properly shaped
-                input_data = scaler.transform([[alpha_power, beta_power, gamma_power, delta_power, theta_power]])
-                
-                # Predict
-                pred = model.predict(input_data)
-                print("Model output:", pred)
-
-                # Check shape
-                if pred.shape[0] > 0 and pred.shape[1] > 0:
-                    predicted_class = np.argmax(pred[0])
-                    action = index_to_action[predicted_class]
-                    print("Predicted action:", action)
+                if(beta_power > BETA_THRESHOLD):
+                    action = "up"
+                    paddle_command = -1
+                elif(beta_power < BETA_THRESHOLD):
+                    action = "down"
+                    paddle_command = 1
                 else:
-                    print("Warning: Model returned unexpected shape:", pred.shape)
+                    action = "none"
+                    paddle_command = 0
             except Exception as e:
                 print("Prediction error:", e)
         
@@ -197,6 +192,8 @@ WIDTH, HEIGHT = 800, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Pong with EEG Control")
 FPS = 60
+WHITE = (255, 255, 255)
+BLACK = (0, 0, 0)
 
 PADDLE_WIDTH, PADDLE_HEIGHT = 10, 100
 BALL_SIZE = 15
@@ -212,6 +209,11 @@ ball_x = WIDTH // 2
 ball_y = HEIGHT // 2
 ball_speed_x = random.choice([-4, 4])
 ball_speed_y = random.choice([-4, 4])
+
+# Scores
+player_score = 0
+opponent_score = 0
+font = pygame.font.Font(None, 74)
 
 clock = pygame.time.Clock()
 running = True
@@ -262,9 +264,14 @@ while running:
         opponent_y -= 3
 
     # Reset ball if it goes off screen
-    if ball_x < 0 or ball_x > WIDTH:
-        ball_x = WIDTH // 2
-        ball_y = HEIGHT // 2
+    if ball_x < 0:
+        opponent_score += 1
+        ball_x, ball_y = WIDTH // 2, HEIGHT // 2
+        ball_speed_x = random.choice([-4, 4])
+        ball_speed_y = random.choice([-4, 4])
+    elif ball_x > WIDTH:
+        player_score += 1
+        ball_x, ball_y = WIDTH // 2, HEIGHT // 2
         ball_speed_x = random.choice([-4, 4])
         ball_speed_y = random.choice([-4, 4])
 
@@ -273,6 +280,11 @@ while running:
     pygame.draw.rect(screen, (255, 255, 255), (player_x, player_y, PADDLE_WIDTH, PADDLE_HEIGHT))
     pygame.draw.rect(screen, (255, 255, 255), (opponent_x, opponent_y, PADDLE_WIDTH, PADDLE_HEIGHT))
     pygame.draw.ellipse(screen, (255, 255, 255), (ball_x, ball_y, BALL_SIZE, BALL_SIZE))
+
+    # Draw scores
+    score_text = font.render(f"{player_score}    {opponent_score}", True, WHITE)
+    screen.blit(score_text, (WIDTH // 2 - score_text.get_width() // 2, 20))
+
     pygame.display.flip()
     clock.tick(FPS)
 
