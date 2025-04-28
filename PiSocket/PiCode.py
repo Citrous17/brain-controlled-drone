@@ -21,7 +21,13 @@ from Utilities import SERIAL_PORT, BAUD_RATE, SAMPLE_RATE, BUFFER_SIZE, SERIAL_S
 # you want to process at once. A larger buffer will give more data but will also increase the
 # amount of data to process
 
-
+SERIAL_PORT = "COM7"	
+SERIAL_SLEEP_TIME = 0.01
+REALTIME_WAVEFORM_SLEEP_TIME = 0.01
+REALTIME_WAVEFORM_RANGE = 128
+BAUD_RATE = 115200
+SAMPLE_RATE = 700
+BUFFER_SIZE = 1024
 data_buffer = deque(maxlen=BUFFER_SIZE)
 
 # Open serial connection
@@ -87,6 +93,30 @@ def apply_filter(data, frequency_range, sample_rate=SAMPLE_RATE):
     filtered_data = signal.filtfilt(b, a, data)
     
     return filtered_data
+
+def notch_filter(data, notch_freq=60.0, quality_factor=30.0, sample_rate=SAMPLE_RATE):
+    """ Apply a notch filter to remove powerline noise (e.g., 60Hz) """
+    nyquist = 0.5 * sample_rate
+    norm_freq = notch_freq / nyquist
+    b, a = signal.iirnotch(norm_freq, quality_factor)
+    return signal.filtfilt(b, a, data)
+
+
+def moving_average(data, window_size=5):
+    return np.convolve(data, np.ones(window_size)/window_size, mode='same')
+
+
+def reject_artifacts(signal, threshold_factor=3):
+    mean = np.mean(signal)
+    std = np.std(signal)
+    mask = np.abs(signal - mean) < threshold_factor * std
+    return signal[mask]
+
+def highpass_filter(data, cutoff=1.0, sample_rate=SAMPLE_RATE):
+    nyquist = 0.5 * sample_rate
+    norm_cutoff = cutoff / nyquist
+    b, a = signal.butter(4, norm_cutoff, btype='high')
+    return signal.filtfilt(b, a, data)
 
 def insert_fft_into_db(freq, fft_values, db_file="fft_data.db"):
     """ Inserts FFT frequency and amplitude data into a SQLite database. """
@@ -267,6 +297,43 @@ if __name__ == "__main__":
             # Remove the outliers from the signal
             signal = remove_outliers(signal)
             freq, fft_values = compute_fft(signal, SAMPLE_RATE)
+            # Convert buffer to NumPy array
+            raw_signal = np.array(data_buffer)
 
-            data_buffer.clear()  # Reset buffer after processing
-            time.sleep(1)  # Update every second
+            # Compute mean and standard deviation
+            mean = np.mean(raw_signal)
+            std = np.std(raw_signal)
+
+            raw_signal = highpass_filter(raw_signal, cutoff=1.0)
+
+            # Apply 3σ clipping
+            filtered_signal = reject_artifacts(raw_signal)
+            filtered_signal = notch_filter(filtered_signal)
+
+            # Analyze filtered signal by frequency bands
+            filtered_data = {}
+
+            for band, (low, high) in bands.items():
+                filtered_data[band] = apply_filter(filtered_signal, (low, high), SAMPLE_RATE)
+                filtered_data[band] = moving_average(filtered_data[band], window_size=5)
+
+
+            print(f"Original size: {len(raw_signal)}, After 3σ filtering: {len(filtered_signal)}")
+
+            # Ensure we have enough samples left after outlier removal
+            if len(filtered_signal) > 10:
+                # Compute FFT on the cleaned signal
+                freq, fft_values = compute_fft(filtered_signal, SAMPLE_RATE)
+
+                # Normalize FFT data (optional, depending on use-case)
+                freq, normalized_fft = normalize_fft_with_csv(freq, fft_values)
+
+                # Save FFT data to CSV
+                save_fft_to_csv(freq, normalized_fft)
+
+                # Insert FFT data into SQLite DB
+                insert_fft_into_db(freq, normalized_fft)
+
+            # Clear the buffer after processing
+            data_buffer.clear()
+            time.sleep(1)  # Wait before next read
