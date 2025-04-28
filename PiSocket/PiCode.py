@@ -5,6 +5,9 @@ import matplotlib.pyplot as plt
 import threading
 from collections import deque
 import csv
+import scipy.signal as signal
+import sqlite3
+from Utilities import SERIAL_PORT, BAUD_RATE, SAMPLE_RATE, BUFFER_SIZE, SERIAL_SLEEP_TIME, REALTIME_WAVEFORM_RANGE, REALTIME_WAVEFORM_SLEEP_TIME, DELTA, THETA, ALPHA, BETA, GAMMA
 
 # Serial Configuration
 # Make sure to change the SERIAL_PORT to the correct port for your Arduino
@@ -30,51 +33,49 @@ data_buffer = deque(maxlen=BUFFER_SIZE)
 # Open serial connection
 try:
     ser = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-    time.sleep(2)  # Give Arduino time to reset
-    print("✅ Serial connection established")
+    time.sleep(2)
+    print("Serial connection established")
 except serial.SerialException as e:
-    print(f"❌ Error opening serial port: {e}")
+    print(f"Error opening serial port: {e}")
     exit()
 
-# ✅ Define read_serial() function
 def read_serial():
-    """ Reads data from Arduino via Serial """
+    """ Reads data from Arduino via Serial connection and appends to data_buffer """
     while True:
         if ser.in_waiting > 0:
             line = ser.readline().decode('utf-8').strip()
             if line.isdigit():
                 data_buffer.append(int(line))
-                print(int(line))
         else:
-            time.sleep(0.01)  # Avoid excessive CPU usage
-
+            # Sleep for a short time to avoid busy waiting
+            time.sleep(SERIAL_SLEEP_TIME) 
 
 def compute_fft(signal, sampling_rate):
     """ Compute FFT of the signal and return raw amplitude values scaled correctly """
-    print("⚡ Running FFT...")
+    print("Running FFT...")
     n = len(signal)
     freq = np.fft.rfftfreq(n, d=1/sampling_rate)  # Frequency bins
     
     # FFT magnitude
     fft_values = np.abs(np.fft.rfft(signal)) / (n / 2)  # Normalize the magnitude to get correct amplitude
-   
+
     # Displaying the frequency and corresponding raw amplitude
     for i, f in enumerate(freq):
         print(f"Frequency: {f:.2f} Hz, Amplitude: {fft_values[i]:.2f}")
 
     return freq, fft_values
 
-def save_fft_to_csv(freq, fft_values, filename="fft_data.csv"):
-    """ Save FFT frequency and amplitude data to a CSV file """
-    print(f"📂 Saving FFT data to {filename}...")
+def save_fft_to_csv(freq, fft_values, filename="normalized_fft_data.csv"):
+    """ Save FFT frequency and normalized amplitude data to a CSV file """
+    print(f"Saving normalized FFT data to {filename}...")
     
     with open(filename, mode='w', newline='') as file:
         writer = csv.writer(file)
-        writer.writerow(["Frequency (Hz)", "Amplitude"])
+        writer.writerow(["Frequency (Hz)", "Normalized Amplitude"])
         for f, amp in zip(freq, fft_values):
             writer.writerow([f, amp])
     
-    print(f"✅ FFT data saved to {filename}")
+    print(f"Normalized FFT data saved to {filename}")
 
 def apply_filter(data, frequency_range, sample_rate=SAMPLE_RATE):
     """ Apply a band-pass filter to extract the specific frequency range """
@@ -181,6 +182,13 @@ def normalize_fft_with_csv(freq, fft_values, csv_file="scope_0.csv"):
 
     return freq, normalized_fft_values / 105.7
 
+def remove_outliers(data, threshold=3):
+    """ Remove outliers from the data based on a z-score threshold """
+    mean = np.mean(data)
+    std_dev = np.std(data)
+    z_scores = (data - mean) / std_dev
+    filtered_data = data[np.abs(z_scores) < threshold]
+    return filtered_data
     
 def plot_realtime_waveform():
     """ Plots the real-time waveform 
@@ -189,11 +197,6 @@ def plot_realtime_waveform():
         Beta (13-30 Hz), Gamma (30-55 Hz)
     """
     # Constants for frequency ranges (in Hz)
-    DELTA = (0.5, 4)
-    THETA = (4, 8)
-    ALPHA = (8, 13)
-    BETA = (13, 30)
-    GAMMA = (30, 55)
     
     # Create a figure with 5 subplots, one for each frequency band
     plt.ion()
@@ -220,11 +223,11 @@ def plot_realtime_waveform():
             print("Updating Realtime Waveform")
             # Compute and plot the waveform for each frequency band
             filtered_data = {
-                "delta": apply_filter(data_buffer, DELTA) /5,
-                "theta": apply_filter(data_buffer, THETA) / 5,
-                "alpha": apply_filter(data_buffer, ALPHA)/5,
-                "beta": apply_filter(data_buffer, BETA)/5,
-                "gamma": apply_filter(data_buffer, GAMMA)/5,
+                "delta": apply_filter(data_buffer, DELTA),
+                "theta": apply_filter(data_buffer, THETA),
+                "alpha": apply_filter(data_buffer, ALPHA),
+                "beta": apply_filter(data_buffer, BETA),
+                "gamma": apply_filter(data_buffer, GAMMA),
             }
 
             # Ensure there is data to plot
@@ -278,26 +281,22 @@ def save_realtime_waveform(fig, filtered_data, filename="realtime_waveform.png")
     print(f"Filtered data saved to {filename}")
 
 if __name__ == "__main__":
-    print("🚀 Script started!")
+    print("Script started!")
 
-    # ✅ Start Serial Reading Thread
     serial_thread = threading.Thread(target=read_serial, daemon=True)
     serial_thread.start()
     print("Serial reading thread started!")
     
     plot_realtime_waveform()
     print("Waveform plotting thread started!")
-    bands = {
-        "delta": (0.5, 4),
-        "theta": (4, 8),
-        "alpha": (8, 13),
-        "beta": (13, 30),
-        "gamma": (30, 55)
-    }
 
     while True:
-        print(f"🛠 Buffer Size: {len(data_buffer)}")
+        print(f"Buffer Size: {len(data_buffer)}")
         if len(data_buffer) >= BUFFER_SIZE:
+            signal = np.array(data_buffer)
+            # Remove the outliers from the signal
+            signal = remove_outliers(signal)
+            freq, fft_values = compute_fft(signal, SAMPLE_RATE)
             # Convert buffer to NumPy array
             raw_signal = np.array(data_buffer)
 
