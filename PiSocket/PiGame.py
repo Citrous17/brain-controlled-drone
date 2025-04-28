@@ -26,14 +26,6 @@ action = "none"
 
 buffer_lock = threading.Lock()  # To protect shared data
 
-if USE_MODEL:
-    model = load_model("eeg_action_model_tf.keras")
-
-    # Load the scaler and action mapping
-    scaler = joblib.load("scaler.pkl")
-    action_to_index = joblib.load("action_to_index.pkl")
-    index_to_action = {v: k for k, v in action_to_index.items()}
-
 # Setup serial connection for EEG (if available)
 try:
     print("Attempting to open serial port...")
@@ -138,10 +130,7 @@ def process_eeg():
         if freq is None or fft_vals is None:
             continue
         
-        # Define frequency band:
-        # Alpha band (8-13 Hz)
-        # Beta band (13-30 Hz)
-        
+        # Define frequency band:        
         alpha_mask = (freq >= ALPHA[0]) & (freq <= ALPHA[1])
         beta_mask = (freq >= BETA[0]) & (freq <= BETA[1])
         gamma_mask = (freq >= GAMMA[0]) & (freq <= GAMMA[1])
@@ -157,7 +146,7 @@ def process_eeg():
         # Debug output
         print(f"Alpha Power: {alpha_power:.6f}, Beta power: {beta_power:.6f}, Gamma power: {gamma_power:.2f}, Delta power: {delta_power:.2f}, Theta power: {theta_power:.2f}")
 
-        # Use ML model to predict action
+        # Use Genercic Algorithm to determine paddle movement
         if USE_ALGORIHITHM:
             try:
                 if(beta_power > BETA_THRESHOLD):
